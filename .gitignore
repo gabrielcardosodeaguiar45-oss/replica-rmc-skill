@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Obsidian (configurações locais — não publicar)
+.obsidian/
+.trash/
+
+# Artefatos de processamento (pasta de processo do usuário)
+_analise.json
+_plano.json
+Réplica*.docx
+Replica*.docx
+Relatorio_Conferencia*.docx
+
+# Scripts auxiliares de release
+_anonymize.py
