@@ -124,12 +124,71 @@
     "contestacao": {
       "type": "object",
       "properties": {
-        "preliminares_levantadas": {"type": "array", "items": {"type": "string"}},
-        "teses_meritorias": {"type": "array", "items": {"type": "string"}},
+        "preliminares_levantadas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "rotulo_banco", "trecho_literal"],
+            "properties": {
+              "id": {"type": "string"},
+              "rotulo_banco": {"type": "string"},
+              "trecho_literal": {"type": "string", "minLength": 20, "description": "1 a 3 frases copiadas LITERALMENTE da contestação. Ipsis litteris. OBRIGATÓRIO. Sem trecho, o item é descartado."},
+              "pagina_aprox": {"type": ["integer", "null"]}
+            }
+          }
+        },
+        "teses_meritorias": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "rotulo_banco", "trecho_literal"],
+            "properties": {
+              "id": {"type": "string"},
+              "rotulo_banco": {"type": "string"},
+              "trecho_literal": {"type": "string", "minLength": 20, "description": "1 a 3 frases copiadas LITERALMENTE da contestação. Ipsis litteris. OBRIGATÓRIO."},
+              "pagina_aprox": {"type": ["integer", "null"]}
+            }
+          }
+        },
         "pede_compensacao": {"type": "boolean"},
         "invoca_in_28_2008": {"type": "boolean"},
-        "menciona_videochamada_09_2023": {"type": "boolean"}
+        "invoca_res_cnj_159_2024": {"type": "boolean"},
+        "invoca_litigancia_predatoria": {"type": "boolean"},
+        "menciona_videochamada_09_2023": {"type": "boolean"},
+        "fatos_extraprocessuais_alegados": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["palavra_chave", "trecho_literal"],
+            "properties": {
+              "palavra_chave": {"type": "string"},
+              "trecho_literal": {"type": "string"},
+              "pagina": {"type": ["integer", "null"]}
+            }
+          }
+        }
       }
+    },
+    "bloqueadores": {
+      "type": "array",
+      "description": "Sinais que exigem escalação humana antes da redação. Pipeline para se houver entrada com criticidade ALTA.",
+      "items": {
+        "type": "object",
+        "required": ["id", "descricao", "criticidade", "acao_recomendada"],
+        "properties": {
+          "id": {"type": "string", "description": "litispendencia_cnj_especifico, oab_divergente_inicial_dje, prescricao_zona_limitrofe, banco_juntou_audio_video, autora_pediu_inexistencia_com_doc_robusta, valor_causa_simbolico, procuracao_data_posterior_inicial"},
+          "descricao": {"type": "string"},
+          "trecho_literal_que_motivou": {"type": ["string", "null"]},
+          "pagina": {"type": ["integer", "null"]},
+          "criticidade": {"type": "string", "enum": ["ALTA", "MEDIA"]},
+          "acao_recomendada": {"type": "string"}
+        }
+      }
+    },
+    "observacoes_caso": {
+      "type": "array",
+      "description": "Campo livre para registrar peculiaridades do caso que não cabem nos campos fixos. Cada item é uma string curta com âncora ao trecho ou página quando possível.",
+      "items": {"type": "string"}
     },
     "laudo_digital": {
       "type": "object",

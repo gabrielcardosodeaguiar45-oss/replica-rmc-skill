@@ -204,6 +204,20 @@ Schema exato em `$CLAUDE_HOME/skills/replica-rmc/references/schema_caso.json`. C
     "seguro_casado": false,
     "nome_seguradora": "..."
   },
+  "bloqueadores": [
+    {
+      "id": "...",
+      "descricao": "...",
+      "trecho_literal_que_motivou": "...",
+      "pagina": 0,
+      "criticidade": "ALTA|MEDIA",
+      "acao_recomendada": "..."
+    }
+  ],
+  "observacoes_caso": [
+    "Banco junta saque complementar de DD/MM/AAAA como prova de uso consciente — trecho na pag. N",
+    "Hash SHA-256 do laudo cobre apenas o segundo contrato, não o originário"
+  ],
   "_meta": {
     "pasta_processo": "...",
     "data_analise": "YYYY-MM-DD",
@@ -212,6 +226,12 @@ Schema exato em `$CLAUDE_HOME/skills/replica-rmc/references/schema_caso.json`. C
   }
 }
 ```
+
+**Observações sobre o schema:**
+
+1. Campos com valor `null`, lista vazia ou string vazia podem ser **omitidos** do JSON final. Schema enxuto reduz prompt das etapas seguintes.
+2. `observacoes_caso` é o campo livre para capturar peculiaridades que não cabem nos campos fixos (ex.: banco usa argumento atípico, autora tem condição médica relevante, processo correlato no mesmo juízo). Lista de strings curtas, com âncora ao trecho/página quando possível.
+3. `bloqueadores` é o gatilho de escalação ao humano. Quando preenchido, o orquestrador interrompe o pipeline.
 
 ### 4. Validações mínimas
 
@@ -222,12 +242,39 @@ Schema exato em `$CLAUDE_HOME/skills/replica-rmc/references/schema_caso.json`. C
 5. Se `contrato_gemeo.existe = true`, preencher todos os campos do gêmeo.
 6. Se `laudo_digital.ip`, executar `check_ip_rfc1918.py` para preencher `ip_classe`.
 7. Se houver TEDs, para cada um cruzar conta destino × conta INSS (invocar `check_ted_conta_inss.py`).
-8. **Para cada preliminar e tese em `contestacao`, capturar o TRECHO LITERAL** (1-3 frases da contestação, entre aspas, suficientes para provar que o banco levantou aquele ponto). Sem o trecho, o redator fica proibido de redigir a seção de rebate. Esta é a **trava anti-alucinação** principal.
-9. **Fatos extraprocessuais alegados pelo banco** (se houver): listar em `fatos_extraprocessuais_alegados`. Ex: banco cita multas de PROCON, cita número de ações do patrono, cita caso específico de outro autor — registrar palavra-chave + página. Se o banco NÃO alega, o redator NÃO pode introduzir esse tópico.
+8. **TRECHO LITERAL OBRIGATÓRIO — REGRA INVIOLÁVEL.** Para cada preliminar e tese em `contestacao`, o campo `trecho_literal` é OBRIGATÓRIO (1 a 3 frases da contestação, entre aspas, copiadas LITERALMENTE do PDF). **Se você não conseguir capturar o trecho literal, REMOVA o item do JSON inteiro** — não liste tese sem trecho. Sem trecho não há rebate. Não há "trecho aproximado", não há "trecho parafraseado", não há "deduzi pelo contexto". Trecho ipsis litteris ou nada.
+9. **Fatos extraprocessuais alegados pelo banco** (se houver): listar em `fatos_extraprocessuais_alegados`. Ex: banco cita multas de PROCON, cita número de ações do patrono, cita caso específico de outro autor. Para cada um, capturar trecho literal + página. Se o banco NÃO alega, o redator NÃO pode introduzir esse tópico.
 
 ### 4bis. Diretiva anti-alucinação
 
 **NUNCA** inferir preliminar/tese que o banco "deveria ter levantado". Só lista o que LITERALMENTE está no texto da contestação. Se dúvida → `null` + flag em `_meta.campos_nao_encontrados`.
+
+### 4ter. Bloqueadores — escalação humana obrigatória
+
+Quando detectar qualquer destes sinais, NÃO seguir o pipeline. Preencher `_analise.json:bloqueadores` com a lista e devolver ao orquestrador para escalação ao Gabriel ANTES da etapa de redação:
+
+1. **Litispendência alegada com CNJ específico.** Banco cita um ou mais processos como duplicata. Risco real de protocolar sobre demanda existente. Gabriel decide se é duplicata ou só semelhança.
+2. **OAB do advogado autor diverge entre inicial e DJE.** Risco de peça com OAB errada ser indeferida. Gabriel confirma qual OAB usar.
+3. **Prescrição alegada com data dentro de zona limítrofe** (entre 4 e 6 anos do contrato). Gabriel decide se acata ou rebate.
+4. **Banco junta áudio, vídeo ou contato telefônico** alegando confissão da autora. Gabriel ouve antes do rebate.
+5. **Inicial pede tese de inexistência absoluta** (não vício de consentimento) e o banco junta documentação contratual robusta (CCB + biometria + hash + IP coerente). Risco de improcedência. Gabriel decide se reconverte para vício.
+6. **Valor da causa zero ou simbólico** (R$ 1,00). Risco de impugnação. Gabriel decide retificação.
+7. **Procuração com data posterior à inicial.** Risco de inexistência de mandato. Gabriel resolve.
+
+Schema do bloqueador:
+
+```json
+{
+  "id": "litispendencia_cnj_especifico",
+  "descricao": "...",
+  "trecho_literal_que_motivou": "...",
+  "pagina": 0,
+  "criticidade": "ALTA|MEDIA",
+  "acao_recomendada": "Confirmar com Gabriel se o CNJ X é duplicata real antes de redigir"
+}
+```
+
+Se houver bloqueadores, o JSON segue contendo todos os outros campos (não interromper extração), mas o orquestrador deve apresentar a lista ao usuário antes de invocar o consultor.
 
 ### 5. Saída
 
@@ -272,13 +319,25 @@ Após terminar:
 OK — análise salva em <PATH>/_analise.json
 
 Resumo:
-- Autor: NOME (CPF, IDADE anos, gênero, benefício)
-- Processo: CNJ na comarca UF
-- Banco: RAZAO_SOCIAL — contrato TIPO NUMERO (averbado DATA)
-- Contrato gêmeo: SIM/NÃO (se SIM: tipo + número)
-- Anexos ausentes: LISTA_CURTA
-- Sinais críticos: LISTA_CURTA (ex: "TED em conta de outro banco", "BMG pré-09/2023", "IP público mal classificado")
-- Campos não encontrados: LISTA
+. Autor: NOME (CPF, IDADE anos, gênero, benefício)
+. Processo: CNJ na comarca UF
+. Banco: RAZAO_SOCIAL, contrato TIPO NUMERO (averbado DATA)
+. Contrato gêmeo: SIM/NÃO (se SIM: tipo + número)
+. Anexos ausentes: LISTA_CURTA
+. Teses do banco capturadas: N (todas com trecho literal)
+. Sinais críticos: LISTA_CURTA
+. Bloqueadores: NENHUM | LISTA_DE_IDS_COM_CRITICIDADE
+. Campos não encontrados: LISTA
 ```
 
-Sem comentários adicionais, sem sugestões de estratégia (isso é trabalho do consultor).
+**Se houver bloqueadores ALTA**, terminar a resposta com bloco destacado:
+
+```
+ATENÇÃO — bloqueadores detectados:
+. <id>: <descricao>. Ação: <acao_recomendada>
+. ...
+
+Recomenda-se interromper o pipeline e consultar o Gabriel antes da redação.
+```
+
+Sem comentários adicionais, sem sugestões de estratégia (isso é trabalho do consultor). NÃO usar travessão (—) ou hífen (-) como aposto na resposta — usar vírgulas, parênteses ou frases separadas.

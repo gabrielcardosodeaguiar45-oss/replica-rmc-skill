@@ -27,32 +27,40 @@ Se apenas o PDF consolidado estiver presente, a skill roda `fatiar-processo` aut
 ```
 /replica-rmc <pasta>
       │
-      ├─ (0) fatiar-processo se necessário (PDF consolidado → pasta fatiada)
+      ├─ (0) fatiar-processo se necessário (PDF consolidado vira pasta fatiada)
       │
-      ├─ (1) Subagent `analisador-processo-rmc`
-      │        Extrai JSON do caso (autor, processo, banco, contratos, anexos,
-      │        TEDs, faturas, laudo digital, RCC gêmeo, etc.)
+      ├─ (1) analisador-processo-rmc
+      │        Extrai _analise.json (autor, processo, banco, contratos, anexos,
+      │        TEDs, faturas, laudo digital, RCC gêmeo, observações_caso,
+      │        bloqueadores). Trecho literal OBRIGATÓRIO em cada tese do banco.
       │
-      ├─ (2) Subagent `consultor-vault-rmc`
-      │        Lê vault Obsidian (Modelos/ReplicasRMC), aplica árvore de
-      │        decisão, seleciona modelo-base + teses + precedentes,
-      │        roda as 16 regras-de-adaptacao, devolve plano editorial
+      ├─ (1.5) Checagem de bloqueadores
+      │        Se houver bloqueador ALTA, pipeline para. Apresenta ao usuário
+      │        antes de redigir. Sem confirmação não segue.
       │
-      ├─ (3) Subagent `redator-replica-rmc`
-      │        Gera .docx Cambria seguindo estrutura-padrao
-      │        (9 blocos + sub-seções de mérito selecionadas)
+      ├─ (2) consultor-vault-rmc
+      │        Aplica 16 regras de adaptação. Gera DOIS arquivos:
+      │        . _plano.json (modelo-base + teses + precedentes + alertas)
+      │        . _contrato_rebate.json (cobertura 100%: cada tese do banco
+      │          com seção dedicada, fundamentos, criticidade, min_paragrafos)
       │
-      ├─ (4) Subagent `revisor-replica-rmc`
-      │        Roda checklist-protocolo (7 blocos), erros-herdados (29
-      │        armadilhas) e scripts de validação. Emite relatório
-      │        APTO ou AJUSTES NECESSÁRIOS.
+      ├─ (3) redator-replica-rmc
+      │        Gera .docx Cambria seguindo estrutura espelhada à contestação
+      │        (preliminares antes do mérito) com densidade dos parágrafos do
+      │        modelo do escritório. Zero travessão como aposto. Frases-modelo
+      │        injetadas com dados reais do caso. Autovalidação 11 itens
+      │        antes de devolver.
       │
-      ├─ (5) Se AJUSTES → volta a (3) com feedback; máx 2 iterações
+      ├─ (4) revisor-replica-rmc
+      │        Checklist + 29 erros + scripts. Cobertura métrica explícita.
+      │        Severidade graduada (CRÍTICO / MÉDIO / COSMÉTICO).
+      │        Word Comments embutidos no .docx, sem relatório paralelo.
+      │
+      ├─ (5) Se AJUSTES NECESSÁRIOS, volta a (3) com feedback; máx 2 iterações.
       │
       └─ (6) Entrega:
-              - .docx da réplica (pronto para revisão humana)
-              - Relatório de conferência (.docx paralelo)
-              - Ficha de aprendizado pré-preenchida em
+              . .docx da réplica com Word Comments do revisor
+              . Ficha de aprendizado pré-preenchida em
                 vault/Aprendizado/ReplicasRMC/YYYY-MM-DD-cliente-processo.md
 ```
 
@@ -68,33 +76,41 @@ Se apenas o PDF consolidado estiver presente, a skill roda `fatiar-processo` aut
 
 Invocar o subagent `analisador-processo-rmc` com prompt:
 
-> "Analise esta pasta de processo RMC/RCC: {{PASTA}}. Extraia dados estruturados conforme template em references/schema_caso.json. Devolva apenas JSON válido. Sem comentários, sem markdown."
+> "Analise esta pasta de processo RMC/RCC: {{PASTA}}. Extraia dados estruturados conforme template em references/schema_caso.json. Trecho literal OBRIGATÓRIO em cada preliminar e tese do banco. Sinalize bloqueadores em campo próprio. Devolva apenas JSON válido."
 
-Esperar JSON de volta. Salvar em `{{PASTA}}/_analise.json`.
+Salvar em `{{PASTA}}/_analise.json`.
 
-### Etapa 2 — Consulta ao vault
+### Etapa 1.5 — Checagem de bloqueadores
+
+Ler `_analise.json:bloqueadores`. Se houver entrada com `criticidade = ALTA`:
+
+1. NÃO avançar para etapa 2.
+2. Apresentar ao usuário a lista de bloqueadores com `acao_recomendada` de cada um.
+3. Aguardar instrução explícita do usuário (resolver, ignorar com risco, abortar).
+
+### Etapa 2 — Consulta ao vault e contrato de rebate
 
 Invocar o subagent `consultor-vault-rmc` com prompt:
 
-> "Dado o JSON de caso em {{PASTA}}/_analise.json, navegue o vault Obsidian (`$OBSIDIAN_VAULT_RMC/Modelos/ReplicasRMC/`) e monte o plano editorial completo. Aplique as 16 regras de adaptação. Devolva apenas JSON com o plano, sem comentários."
+> "Dado {{PASTA}}/_analise.json, leia o vault em `$OBSIDIAN_VAULT_RMC/Modelos/ReplicasRMC/`. Aplique as 16 regras de adaptação. Gere DOIS arquivos: _plano.json (plano editorial) e _contrato_rebate.json (cobertura 100% das teses do banco com seção, fundamentos, criticidade e min_paragrafos)."
 
-Esperar JSON de plano editorial. Salvar em `{{PASTA}}/_plano.json`.
+Salvar em `{{PASTA}}/_plano.json` e `{{PASTA}}/_contrato_rebate.json`.
 
 ### Etapa 3 — Redação
 
 Invocar o subagent `redator-replica-rmc` com prompt:
 
-> "Gere a réplica .docx com base em {{PASTA}}/_analise.json e {{PASTA}}/_plano.json. Salve em {{PASTA}}/Réplica - {{CNJ-resumido}} - {{NOME_AUTOR}}.docx. Layout Cambria conforme configuracoes-visuais do vault. NÃO use traços como marcadores em listas (usar a), b), c), d) ou i, ii, iii)."
+> "Gere a réplica .docx baseada em _analise.json + _plano.json + _contrato_rebate.json em {{PASTA}}. Salve em {{PASTA}}/Réplica - {{CNJ-resumido}} - {{NOME_AUTOR}}.docx. Estrutura espelhada à contestação (preliminares antes do mérito). Densidade dos parágrafos do modelo do escritório. ZERO travessão (—) ou hífen (-) como aposto. Listas em a), b), c) ou i, ii, iii. Autovalidação obrigatória dos 11 itens antes de devolver."
 
 ### Etapa 4 — Revisão
 
 Invocar o subagent `revisor-replica-rmc` com prompt:
 
-> "Valide a réplica em {{PASTA}}/Réplica*.docx. Rode checklist-protocolo, erros-herdados (29) e scripts scripts/check_*.py. Gere relatório em {{PASTA}}/Relatorio_Conferencia_{{CNJ-resumido}}.docx. Classifique APTO ou AJUSTES NECESSÁRIOS. Se AJUSTES, liste exatamente o que refazer."
+> "Valide {{PASTA}}/Réplica*.docx. Cobertura 100% do _contrato_rebate.json. Severidade graduada nos achados. Word Comments embutidos no .docx (não gerar relatório paralelo). Resumo no chat com cobertura métrica e classificação APTO / APTO COM RESSALVAS / AJUSTES NECESSÁRIOS."
 
 ### Etapa 5 — Iteração
 
-Se o revisor retornou AJUSTES, invocar novamente o redator com o relatório do revisor como feedback. Máximo **2 iterações**. Após 2, parar e entregar mesmo assim com alerta claro no final da resposta.
+Se classificação AJUSTES NECESSÁRIOS, salvar `_ajustes_v<N>.md` e re-invocar o redator com esse arquivo como feedback. Máximo **2 iterações**. Após 2, entregar com classificação AJUSTES RESIDUAIS e alerta no final da resposta.
 
 ### Etapa 6 — Ficha de aprendizado
 
@@ -108,14 +124,16 @@ No final, responder ao usuário com mensagem curta neste formato exato:
 Réplica gerada.
 
 Arquivo: {{PATH_DOCX}}
-Relatório: {{PATH_RELATORIO}}
 Ficha: {{PATH_FICHA}}
 
-Classificação: {{APTO|AJUSTES APLICADOS|AJUSTES RESIDUAIS}}
+Classificação: {{APTO | APTO COM RESSALVAS | AJUSTES APLICADOS | AJUSTES RESIDUAIS}}
+Cobertura de teses do banco: {{N}}/{{N}} (100%)
 Pontos de atenção: {{LISTA_CURTA}}
 ```
 
-Nada mais. Sem resumo do que foi feito, sem recap — o usuário abre o `.docx`, revisa e protocola.
+O `.docx` da réplica já vem com Word Comments do revisor embutidos no parágrafo problemático (apenas CRÍTICOS e MÉDIOS, sem poluir com COSMÉTICOS).
+
+Nada mais. Sem resumo do que foi feito, sem recap, o usuário abre o `.docx`, revisa e protocola. NÃO usar travessão como aposto na resposta.
 
 ## Configuração
 
@@ -165,15 +183,18 @@ O subagent `consultor-vault-rmc` deve ler (não duplicar aqui):
 
 Ver `scripts/` desta skill. Todos Python 3, dependências: `pymupdf`, `python-docx`.
 
-1. `extract_processo.py` — extração estruturada de PDF processual.
-2. `check_ip_rfc1918.py` — validação de IP contra blocos privados.
-3. `check_ted_conta_inss.py` — cruzamento conta INSS × conta TED.
-4. `detect_2via_massiva.py` — detecta postagem concentrada em faturas.
-5. `check_cartao_gemeo.py` — cruza número do cartão × HISCON.
-6. `check_bmg_pre_09_2023.py` — flag para BMG pré-setembro/2023.
-7. `check_refin_maquiador_bmg.py` — detecta "crédito de refin" sem queda de saldo.
-8. `gerar_docx.py` — montagem final .docx Cambria.
-9. `forcar_cambria.py` — força Cambria em .docx existente.
+1. `extract_processo.py` para extração estruturada de PDF processual.
+2. `check_ip_rfc1918.py` para validação de IP contra blocos privados.
+3. `check_ted_conta_inss.py` para cruzamento conta INSS × conta TED.
+4. `detect_2via_massiva.py` para detectar postagem concentrada em faturas.
+5. `check_cartao_gemeo.py` para cruzar número do cartão × HISCON.
+6. `check_bmg_pre_09_2023.py` para flag de BMG pré-setembro/2023.
+7. `check_refin_maquiador_bmg.py` para detectar "crédito de refin" sem queda de saldo.
+8. `check_ancora_contestacao.py` para validar âncora de cada afirmação da réplica.
+9. `gerar_tabela_onerosidade.py` para os 6 valores adaptativos da tabela do mérito.
+10. `gerar_docx.py` para montagem final .docx Cambria.
+11. `forcar_cambria.py` para forçar Cambria em .docx existente.
+12. `aplicar_layout_modelo.py` para aplicar timbre + estilos + alinhamentos do modelo do vault.
 
 ## O que esta skill NÃO faz
 
@@ -186,9 +207,10 @@ Ver `scripts/` desta skill. Todos Python 3, dependências: `pymupdf`, `python-do
 
 Se a skill for interrompida no meio (ex: contexto acaba), retomar pelo JSON salvo:
 
-1. Se existir `_analise.json` e não `_plano.json`: começar da etapa 2.
-2. Se existir `_plano.json` e não `.docx`: começar da etapa 3.
-3. Se existir `.docx` sem relatório: começar da etapa 4.
+1. Se existir `_analise.json` e não `_plano.json`: começar da etapa 1.5 (checagem de bloqueadores) e seguir para etapa 2.
+2. Se existir `_plano.json` mas não `_contrato_rebate.json`: começar da etapa 2 com prompt parcial pedindo só o contrato.
+3. Se existir os três JSONs e não `.docx`: começar da etapa 3.
+4. Se existir `.docx` sem revisão: começar da etapa 4.
 
 ## Referências cruzadas
 
