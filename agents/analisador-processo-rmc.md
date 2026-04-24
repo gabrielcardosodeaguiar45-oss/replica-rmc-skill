@@ -251,15 +251,29 @@ Schema exato em `$CLAUDE_HOME/skills/replica-rmc/references/schema_caso.json`. C
 
 ### 4ter. Bloqueadores — escalação humana obrigatória
 
-Quando detectar qualquer destes sinais, NÃO seguir o pipeline. Preencher `_analise.json:bloqueadores` com a lista e devolver ao orquestrador para escalação ao Gabriel ANTES da etapa de redação:
+**Regra geral:** bloqueador é só quando o vault NÃO resolve. Toda tese do banco que tem rebate consolidado nas teses-modulares + jurisprudência catalogada do vault NÃO é bloqueador. Vai para o `_contrato_rebate.json` como tese de mérito normal.
 
-1. **Litispendência alegada com CNJ específico.** Banco cita um ou mais processos como duplicata. Risco real de protocolar sobre demanda existente. Gabriel decide se é duplicata ou só semelhança.
-2. **OAB do advogado autor diverge entre inicial e DJE.** Risco de peça com OAB errada ser indeferida. Gabriel confirma qual OAB usar.
-3. **Prescrição alegada com data dentro de zona limítrofe** (entre 4 e 6 anos do contrato). Gabriel decide se acata ou rebate.
-4. **Banco junta áudio, vídeo ou contato telefônico** alegando confissão da autora. Gabriel ouve antes do rebate.
-5. **Inicial pede tese de inexistência absoluta** (não vício de consentimento) e o banco junta documentação contratual robusta (CCB + biometria + hash + IP coerente). Risco de improcedência. Gabriel decide se reconverte para vício.
-6. **Valor da causa zero ou simbólico** (R$ 1,00). Risco de impugnação. Gabriel decide retificação.
-7. **Procuração com data posterior à inicial.** Risco de inexistência de mandato. Gabriel resolve.
+**Antes de classificar como bloqueador**, perguntar:
+
+1. O vault tem tese consolidada para isto? (Ler MOC + teses-modulares + bancos de jurisprudência por estado.)
+2. O cenário tem precedente direto do TJ da UF do caso? (Ex.: prescrição em RMC/RCC do AM tem AgInt no REsp 1.769.662/PR + TJAM AI 4004814-62.2024 + TJAM AI 4005578-48.2024.)
+3. Há decisão recente do mesmo escritório (em `Aprendizado/ReplicasRMC/`) que resolveu cenário equivalente?
+
+Se SIM para qualquer das três, não é bloqueador. Vira tese de mérito ALTA no contrato de rebate.
+
+**Quando É bloqueador (gatilhos restritos):**
+
+1. **Litispendência alegada com CNJ específico de processo realmente existente.** O banco junta cópia ou número que aponta para ação efetivamente ajuizada com identidade de partes E pedido. Risco real de tríplice identidade. Não confundir com a mera alegação de "outras ações sobre o mesmo contrato" sem comprovação, que vira tese de mérito.
+2. **OAB do advogado autor diverge entre inicial e DJE/procuração.** Não tem como o consultor decidir; precisa do advogado confirmar qual OAB usar.
+3. **Banco junta áudio, vídeo ou registro de contato telefônico** alegando confissão da autora. Gabriel precisa ouvir/assistir antes do rebate, porque a estratégia depende do conteúdo concreto da gravação.
+4. **Inicial pediu inexistência absoluta da relação E o banco juntou documentação digital robusta (CCB + biometria + hash + IP coerente com a residência declarada).** Cenário sem espaço para reconverter para tese de vício sem aditamento. Gabriel decide.
+5. **Valor da causa zero ou simbólico** (R$ 1,00 ou inferior). Risco de impugnação ao valor. Gabriel decide retificação.
+6. **Procuração com data posterior à inicial.** Risco de inexistência de mandato. Gabriel resolve.
+7. **Comarca completamente fora do mapa coberto pelo vault** (UF que não é AM/AL/BA/MG/SE). Pipeline para porque modelo-base não existe.
+
+**Prescrição NÃO é bloqueador por si só.** Se o vault tem tese consolidada (decenal CDC + trato sucessivo + decadência inaplicável), trata-se de tese de mérito ALTA, jamais bloqueador. Bloqueador de prescrição existe apenas se o caso fugir totalmente do mapa do vault, o que é raro em RMC/RCC.
+
+**Robustez do contrato do banco NÃO é bloqueador por si só.** Hash + biometria + selfie + IP + geolocalização robustos formam tese de mérito ALTA, com linha de defesa padrão (atacar elemento por elemento). Bloqueador só quando a inicial pediu inexistência absoluta com documentação adversária irretocável.
 
 Schema do bloqueador:
 
