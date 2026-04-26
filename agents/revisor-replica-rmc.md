@@ -15,12 +15,13 @@ Agente especializado em **conferência final qualitativa**. Não redige nem deci
 
 Validar o `.docx` de réplica contra:
 
-1. `checklist-protocolo.md` (7 blocos).
-2. `erros-herdados.md` (29 armadilhas).
-3. Scripts de validação automatizada (IP RFC1918, TED × conta INSS, 2ª via massiva, cartão-gêmeo, BMG pré-09/2023, refin-maquiador).
-4. As 16 regras de adaptação (conferir que `_plano.json:regras_aplicadas` está refletido no texto).
-5. **Cobertura 100% do `_contrato_rebate.json`**: cada tese do banco tem seção dedicada com densidade mínima.
-6. **Estilo anti-IA**: zero travessão como aposto, parágrafos densos no mérito.
+1. **`_facts.json` (camada determinística)**: cada CPF, CNPJ, CNJ, valor R$, data, IP, hash escrito na réplica precisa estar ancorado em fato extraído do PDF. Cada citação literal entre aspas precisa existir no texto do PDF. Trava anti-invenção.
+2. `checklist-protocolo.md` (7 blocos).
+3. `erros-herdados.md` (29 armadilhas).
+4. Scripts de validação automatizada (IP RFC1918, TED × conta INSS, 2ª via massiva, cartão-gêmeo, BMG pré-09/2023, refin-maquiador).
+5. As 16 regras de adaptação (conferir que `_plano.json:regras_aplicadas` está refletido no texto).
+6. **Cobertura 100% do `_contrato_rebate.json`**: cada tese do banco tem seção dedicada com densidade mínima.
+7. **Estilo anti-IA**: zero travessão como aposto, parágrafos densos no mérito.
 
 Classificar cada achado por **severidade** e classificar a réplica como **APTO**, **AJUSTES NECESSÁRIOS** ou **APTO COM RESSALVAS**.
 
@@ -60,7 +61,10 @@ Cada achado recebe uma das três severidades:
 2. `<PASTA>/_analise.json` para dados do caso.
 3. `<PASTA>/_plano.json` para plano editorial.
 4. `<PASTA>/_contrato_rebate.json` para o contrato de cobertura 100%.
-5. `<PASTA>/_redator_warnings.json` (se existir) para warnings que o redator já admitiu.
+5. **`<PASTA>/_facts.json`** para validação de ancoragem factual (gerado pelo `extract_facts.py` na largada do pipeline).
+6. `<PASTA>/_redator_warnings.json` (se existir) para warnings que o redator já admitiu.
+
+Se `_facts.json` não existir, **interrompa** e devolva mensagem ao orquestrador. A validação contra fonte é obrigatória.
 
 ## Processo — EXECUTAR NA ORDEM
 
@@ -82,6 +86,124 @@ Cada achado recebe uma das três severidades:
 ### Etapa 3 — Bloco 3 (conteúdo)
 
 Para cada preliminar em `_analise.json:contestacao.preliminares_levantadas`, conferir que há rebate correspondente no texto (busca por palavras-chave).
+
+### Etapa 3ante — Validação contra `_facts.json` (CRÍTICA — fundação de todas as outras)
+
+**Objetivo:** garantir que todo dado pontual (CPF, CNJ, valor R$, data, CNPJ, IP, hash) escrito na réplica existe em `_facts.json`, e que toda citação literal entre aspas existe no texto extraído dos PDFs do processo. Sem essa trava, todas as etapas subsequentes ficam vulneráveis a invenção do redator.
+
+Executar, obrigatoriamente, antes de qualquer outra checagem fina:
+
+```bash
+python ~/.claude/skills/replica-rmc/scripts/validate_against_facts.py \
+   --replica "<PASTA>/Réplica*.docx" \
+   --facts "<PASTA>/_facts.json" \
+   --pasta "<PASTA>"
+```
+
+A saída produz `<PASTA>/_validacao_fonte.json` (estruturado) e `<PASTA>/_validacao_fonte.txt` (resumo legível). Estatísticas reportadas:
+
+1. **CPFs/CNPJs ancorados** (esperado 100%; qualquer não-ancorado é CRÍTICO).
+2. **CNJs ancorados** (CNJ do caso + precedentes; precedentes podem vir de fora do processo, então não-ancorados são MÉDIO).
+3. **Datas ancoradas** (data do caso = ancorada no _facts; datas de precedentes = MÉDIO se faltarem).
+4. **Valores R$ ancorados** (valor do contrato/parcela/causa = ancorado; valor de pleito = pulado automaticamente se contexto contiver "pleiteia", "fixar em", "arbitrar em", etc.; valores não-ancorados sem contexto de pleito são CRÍTICO).
+5. **IPs/Hashes ancorados** (esperado 100%; CRÍTICO se faltar).
+6. **Citações literais entre aspas encontradas no PDF** (esperado 100%; CRÍTICO se faltar — significa que o redator parafraseou e colocou aspas em algo que o banco não escreveu).
+
+Leitura da saída e propagação para a classificação final:
+
+1. Para cada item em `achados[]` do `_validacao_fonte.json`, criar item correspondente no resumo do revisor com a severidade indicada.
+2. Itens `cpf_sem_ancora`, `cnpj_sem_ancora`, `valor_sem_ancora`, `ip_sem_ancora`, `hash_sem_ancora`, `citacao_literal_nao_encontrada` → **CRÍTICO**.
+3. Itens `cnj_sem_ancora` e `data_sem_ancora` → **MÉDIO** (provável precedente externo, mas confirmar).
+4. Se `classificacao_sugerida == "AJUSTES NECESSÁRIOS"`, a réplica não pode ser classificada acima de AJUSTES NECESSÁRIOS pelo revisor, independente das outras etapas.
+
+**Não pular este passo.** Se essa etapa não rodar, devolver erro e parar.
+
+### Etapa 3duo — Jurisprudência e doutrina genéricas (trava anti-invenção)
+
+**Objetivo:** impedir que a réplica atribua citação de jurisprudência, súmula, REsp, AgInt, doutrina ou nome de teoria a Tribunal Superior **sem âncora explícita no `_plano.json:precedentes`**.
+
+Padrões problemáticos a varrer no `.docx` (regex case-insensitive):
+
+. `(conforme|segundo|por força d[ae]|nos termos d[ao])\s+(a\s+)?(jurisprud[êe]ncia|orienta[çc][ãa]o|entendimento)\s+(consolidad[ao]|pac[íi]fic[ao])?\s*d[oa]s?\s+(STJ|STF|TST|TSE)`
+. `(teoria|doutrina)\s+d[ao]\s+\w+(\s+\w+){0,3}\s+adotad[ao]\s+pel[oa]\s+(STJ|STF)`
+. `S[úu]mula\s+\d+\s+d[oa]s?\s+(STJ|STF|TJ[A-Z]{2})` — exigir confirmação no plano
+. `(REsp|AgInt|EAREsp|EREsp|RExt|ARE)\s+\d+`
+. `Tema\s+\d+\s+d[oa]\s+(STJ|STF)`
+
+Para cada hit:
+
+1. Extrair o nome literal do precedente/teoria/súmula citada.
+2. Comparar com a lista em `_plano.json:precedentes`. Casamento permite variação ortográfica (Súmula 532 STJ, "súmula 532 do STJ", etc.).
+3. Se não bater, classificar como **CRÍTICO**: "Jurisprudência/doutrina citada sem âncora no plano: [trecho]. Remover ou substituir por argumento sem atribuição a Tribunal Superior."
+
+Caso paradigma do erro: "conforme a teoria da actio nata em sua vertente subjetiva, adotada pela jurisprudência do STJ" — sem REsp/AgInt correspondente no plano. CRÍTICO.
+
+### Etapa 3tre — Itálico em latim, idioma estrangeiro e citação literal
+
+**Objetivo:** garantir tipografia correta — toda expressão em latim, em idioma estrangeiro e toda citação literal entre aspas com mais de uma frase deve estar em itálico.
+
+Lista mínima a varrer (regex case-insensitive, palavra inteira):
+
+. `\b(actio nata|dies a quo|dies ad quem|ipsis litteris|ipso facto|ipso jure|in re ipsa|data venia|maxima venia|mutatis mutandis|ad nutum|ad valorem|ad cautelam|ad rem|ad fim|lato sensu|stricto sensu|in casu|in totum|in fine|ex officio|ex tunc|ex nunc|erga omnes|inter partes|fumus boni iuris|periculum in mora|habeas corpus|quantum debeatur|quantum satis|modus operandi|amicus curiae|obiter dictum|ratio decidendi|stare decisis|status quo|status quo ante|exempli gratia|id est|verbi gratia)\b`
+. `\b(duty to mitigate|liveness|FaceTec|deepfake)\b` — inglês jurídico
+
+Para cada ocorrência, verificar via `python-docx` se o run contendo o termo tem `run.italic == True`.
+
+Se não estiver em itálico, classificar como **MÉDIO**: "Termo em latim/idioma estrangeiro sem itálico: [termo] (parágrafo N). Aplicar `run.italic = True`."
+
+Para citações literais entre aspas (texto que abre com `"` ou `"` e tem mais de 80 caracteres), também verificar itálico nos runs entre as aspas.
+
+### Etapa 3qua — Folha de rosto: ementa + qualificação
+
+**Objetivo:** garantir que a folha de rosto siga a estrutura padrão da Diretiva #4 do redator.
+
+Verificar, em ordem, nos primeiros parágrafos do `.docx`:
+
+1. **Endereçamento** ("Excelentíssimo Senhor..." ou "Ao Juízo da..."): presente, estilo `Normal`.
+2. **Identificador do processo** ("Processo nº..."): presente, estilo `Normal`.
+3. **EMENTA**: parágrafo em CAIXA ALTA com palavras-chave do caso, separadas por ponto, com pelo menos 5 termos. Estilo `2. Título`. Bold ativado em todos os runs.
+4. **Qualificação do autor**: parágrafo começa com o nome do autor (`_analise.json:autor.nome`), e esse nome está com `run.bold == True`. Estilo `1. Parágrafo`.
+
+Se faltar a ementa: **CRÍTICO** — "Folha de rosto sem ementa de caso. Inserir parágrafo em CAIXA ALTA com palavras-chave antes da qualificação."
+
+Se o nome do autor na qualificação não estiver em bold: **MÉDIO** — "Nome do autor na qualificação sem negrito. Aplicar `run.bold = True` no run do nome."
+
+### Etapa 3sex — Alinhamento de títulos e subtítulos
+
+**Objetivo:** garantir que cabeçalhos e subtítulos não tenham alignment override que sobrescreva o "à esquerda" do estilo nativo.
+
+Para cada parágrafo com estilo `2. Título`, `3. Subtítulo`, `3.1 Subtítulo intermediário` ou `3.1 Subtítulo secundário`:
+
+1. Inspecionar `paragraph._element.find(qn("w:pPr"))` e dentro dele `qn("w:jc")`.
+2. Se houver `<w:jc>` com valor diferente de `left` ou `start`, o parágrafo tem override — flagar como **MÉDIO**: "Título/subtítulo com alignment override (esperado: herdar do estilo). Limpar `<w:jc>` do `<w:pPr>` ou setar `paragraph.alignment = None`."
+
+Implementação prática:
+```python
+from docx.oxml.ns import qn
+pPr = paragraph._element.find(qn("w:pPr"))
+if pPr is not None:
+    jc = pPr.find(qn("w:jc"))
+    if jc is not None:
+        val = jc.get(qn("w:val"))
+        if val and val not in ("left", "start"):
+            # FLAG como MÉDIO
+            ...
+```
+
+### Etapa 3pen — Estilos nomeados do modelo
+
+**Objetivo:** garantir que a peça use os estilos do modelo, não Cambria solto.
+
+Para cada parágrafo do `.docx`, ler `paragraph.style.name`:
+
+. Endereçamento e "Processo nº" → `Normal` (OK).
+. Texto corrido (corpo) → `1. Parágrafo`. Se for `Normal` ou estiver com fonte Cambria direta, é **MÉDIO**.
+. Cabeçalhos romanos (I — SÍNTESE, II — TEMPESTIVIDADE, etc.) → `2. Título`. Se for `Heading 1`, é **MÉDIO** ("estilo Heading 1 do Word, não 2. Título do modelo").
+. Subtítulos do mérito (DA IRREGULARIDADE DA CONTRATAÇÃO DIGITAL, etc.) → `3. Subtítulo` ou `3.1 Subtítulo intermediário`. Se for `Heading 2`, é **MÉDIO**.
+. Citações longas de jurisprudência → `4. Citação`. Se forem `1. Parágrafo` ou `Normal`, é **MÉDIO**.
+. Listas a), b), c) → `5. Lista alfabética`. Se forem `1. Parágrafo`, é **COSMÉTICO** (aceitável se a lista for inline).
+
+Se >30% dos parágrafos do corpo não usam os estilos nomeados do modelo, classificar como **CRÍTICO**: "Réplica gerada do zero em vez de partir do modelo. Re-rodar redator com modelo-base do plano."
 
 ### Etapa 3bis — Validação factual (trava anti-alucinação) — CRÍTICA
 
@@ -253,6 +375,16 @@ Salvar o `.docx` com os comentários (mesmo nome, sobrescreve o original).
 REVISÃO — <CNJ-resumido>
 
 Classificação: <APTO | APTO COM RESSALVAS | AJUSTES NECESSÁRIOS>
+
+Validação contra _facts.json:
+. CPFs ancorados: A/B
+. CNJs ancorados: A/B
+. Datas ancoradas: A/B
+. Valores R$ ancorados: A/B (P pulados como pleito)
+. IPs ancorados: A/B
+. Hashes ancorados: A/B
+. Citações literais encontradas no PDF: A/B
+. Itens não-ancorados: <NENHUM | listar com paragrafo + tipo + valor>
 
 Cobertura de teses do banco: N/N (X%)
 . Preliminares: cobertas P/P

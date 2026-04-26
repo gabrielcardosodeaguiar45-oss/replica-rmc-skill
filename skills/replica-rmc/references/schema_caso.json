@@ -257,7 +257,20 @@
         "data_analise": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
         "arquivos_extraidos": {"type": "array", "items": {"type": "string"}},
         "campos_nao_encontrados": {"type": "array", "items": {"type": "string"}},
-        "versao_schema": {"type": "string", "default": "1.0.0"}
+        "versao_schema": {"type": "string", "default": "1.1.0"},
+        "fontes_facts": {
+          "type": "object",
+          "description": "Mapeia o caminho do campo (notação de ponto, ex: 'autor.cpf', 'teds[0].valor') ao item de _facts.json que originou o dado. OBRIGATÓRIO para todo dado pontual escrito no JSON. O revisor consulta isso para validar âncora.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["arquivo", "pagina"],
+            "properties": {
+              "arquivo": {"type": "string"},
+              "pagina": {"type": "integer"},
+              "valor_em_facts": {"type": "string", "description": "Valor literal extraído de _facts.json (para auditoria)"}
+            }
+          }
+        }
       }
     }
   }

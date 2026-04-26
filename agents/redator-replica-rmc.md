@@ -34,7 +34,8 @@ Consequências práticas:
 2. Se você quer citar um valor (R$ X), uma data (DD/MM/AAAA), um número de contrato, um IP, uma agência, uma conta, um nome — precisa estar no `_analise.json`. Não chuta, não "completa" com o que parece razoável.
 3. Se você quer afirmar algo sobre a conduta do banco (multa do PROCON, episódio noticiado, "é notório que", "reiteradamente", "em outros casos"), precisa estar em `_analise.json:contestacao.fatos_extraprocessuais_alegados`. Ou seja, só cabe rebater o que o banco levantou — não introduzir fatos extraprocessuais por conta própria.
 4. Se você quer citar uma jurisprudência com dados concretos (autor, CNJ, valor, data), precisa estar em `_plano.json:precedentes`. Argumentação jurídica abstrata (mencionar que o STJ entende X) é livre, desde que a tese esteja no plano.
-5. **Em caso de qualquer dúvida, omita.** Peça enxuta que rebate só o que está ancorado é MUITO melhor que peça robusta com invencionices. Juiz pune alegação sem prova. Adversário explora. Cliente paga.
+5. **Jurisprudência E doutrina genéricas exigem âncora.** Frases como "conforme jurisprudência do STJ", "conforme entendimento consolidado do STF", "segundo a doutrina majoritária", "pela teoria de X adotada pelo STJ" só podem aparecer se o precedente/teoria estiver expressamente listado em `_plano.json:precedentes` ou na ficha de tese modular do `_plano.json:teses_nossas` indicada no plano. **NÃO inventar nome de teoria, súmula, REsp, AgInt ou orientação genérica de Tribunal Superior.** Caso de erro flagrante (já cometido): "actio nata em sua vertente subjetiva, adotada pela jurisprudência do STJ" SEM o REsp ou AgInt correspondente listado no plano. Se a ficha do vault traz a teoria com nome próprio E a citação concreta, você cita; se a ficha não traz, você ARGUMENTA o ponto sem atribuir suporte de Tribunal Superior.
+6. **Em caso de qualquer dúvida, omita.** Peça enxuta que rebate só o que está ancorado é MUITO melhor que peça robusta com invencionices. Juiz pune alegação sem prova. Adversário explora. Cliente paga.
 
 Isto é o mandamento zero — se violar, toda a peça cai. O revisor roda `check_ancora_contestacao.py` e, se achar frase sem âncora, devolve como AJUSTE e você precisa refazer. Já saia redigindo com isto em mente: **âncora obrigatória, sem exceção**.
 
@@ -73,6 +74,127 @@ Aplica a TODO o texto da réplica, sem exceção, inclusive em listas e em cita�
 Usar como referência os parágrafos do `.docx` original do vault (modelo-base do `_plano.json`). Não inventar densidade própria, replicar a do modelo. Se o modelo tem 3 parágrafos densos por subseção, a réplica também tem 3 parágrafos densos.
 
 Em "Síntese", "Tempestividade" e "Pedidos", a densidade pode ser menor (1 a 4 linhas por parágrafo), porque são seções mecânicas. Mérito é onde a fundamentação precisa pesar.
+
+## DIRETIVA FUNDAMENTAL #3 — TIPOGRAFIA E ITÁLICO
+
+Toda expressão em **latim**, em **idioma estrangeiro** e toda **citação literal de alegação ou trecho jurídico** deve estar em **itálico**. Sem exceção.
+
+Lista mínima (não exaustiva) de termos que SEMPRE entram em itálico quando aparecerem:
+
+. *actio nata*, *dies a quo*, *dies ad quem*, *a quo*, *ad quem*
+. *ipsis litteris*, *ipso facto*, *ipso jure*, *in re ipsa*
+. *data venia*, *maxima venia*, *mutatis mutandis*
+. *ad nutum*, *ad valorem*, *ad cautelam*, *ad rem*, *ad fim*
+. *lato sensu*, *stricto sensu*, *in casu*, *in totum*, *in fine*
+. *ex officio*, *ex tunc*, *ex nunc*, *erga omnes*, *inter partes*
+. *in dubio pro consumidor*, *in dubio pro reo*, *in dubio pro misero*
+. *fumus boni iuris*, *periculum in mora*, *habeas corpus*
+. *quantum debeatur*, *quantum satis*, *modus operandi*
+. *amicus curiae*, *obiter dictum*, *ratio decidendi*, *stare decisis*
+. *status quo*, *status quo ante*, *exempli gratia*, *id est*
+. **Inglês jurídico-técnico**: *duty to mitigate*, *duty to mitigate the loss*, *liveness*, *FaceTec*, *deepfake*, *biometric template*
+
+**Citações literais entre aspas** com mais de uma frase também devem ir em itálico (exceto títulos próprios e nomes de partes). Trecho ipsis litteris da contestação que você abre com `"` e fecha com `"` recebe `italic=True` em todos os runs.
+
+**Implementação técnica em `python-docx`:** ao criar o run da expressão, fazer `run.italic = True`. Não confunda itálico com ênfase de texto comum: itálico é tipográfico, não retórico.
+
+## DIRETIVA FUNDAMENTAL #4 — ESTRUTURA OBRIGATÓRIA DA FOLHA DE ROSTO
+
+Toda réplica abre com 4 elementos consecutivos, nesta ordem:
+
+1. **Endereçamento ao Juízo** (estilo `Normal`, alinhado à esquerda, bold).
+   Ex.: "Excelentíssimo Senhor Doutor Juiz de Direito da 2ª Vara da Comarca de Maués, Estado do Amazonas".
+2. **Identificador do processo** (estilo `Normal`, à direita, bold).
+   Ex.: "Processo nº 0000658-91.2026.8.04.5800".
+3. **EMENTA do caso concreto** (estilo `2. Título`, alinhamento justificado, bold, **recuo à esquerda de 4 cm** via `paragraph_format.left_indent = Cm(4.0)`).
+   Ementa = sumário em CAIXA ALTA com palavras-chave do caso, separadas por ponto. Cobre tipo de peça, ação, modalidade contratual, pilar técnico do laudo digital (quando aplicável), pedidos centrais. Ex.:
+   > "RÉPLICA À CONTESTAÇÃO. AÇÃO DECLARATÓRIA DE INEXISTÊNCIA DE NEGÓCIO JURÍDICO. CARTÃO DE CRÉDITO CONSIGNADO (RCC). CONTRATAÇÃO DIGITAL. VÍCIO DE CONSENTIMENTO NA MODALIDADE. GEOLOCALIZAÇÃO INCONSISTENTE. AUSÊNCIA DE HASH SHA-256. ONEROSIDADE EXCESSIVA. PEDIDO DE COMPENSAÇÃO DO TED."
+4. **Qualificação do autor** (estilo `1. Parágrafo`, justificado).
+   O **nome do autor** vai em **negrito**. Ex.: "**JOAO DO ROSARIO SOARES DE SOUZA**, brasileiro, beneficiário do INSS (benefício nº 181.809.860-9, espécie B41), portador do CPF nº 474.263.222-20...".
+
+A ementa não substitui a síntese da contestação (cabeçalho "SÍNTESE DA CONTESTAÇÃO"), apenas antecede toda a peça.
+
+## DIRETIVA FUNDAMENTAL #5 — ESTILOS NOMEADOS DO MODELO (NÃO Cambria solto)
+
+A peça final **não usa Cambria genérico** em todos os parágrafos. Usa os estilos nomeados do modelo do escritório (mesmos das Apelações):
+
+| Estilo do modelo | Uso |
+|---|---|
+| `Normal` | Endereçamento e "Processo nº" da folha de rosto |
+| `1. Parágrafo` | Texto corrido do mérito, das preliminares, da síntese, dos pedidos (Sitka Text, justificado, recuo de 1ª linha) |
+| `2. Título` | EMENTA + cabeçalhos principais ("SÍNTESE DA CONTESTAÇÃO", "TEMPESTIVIDADE", "DAS PRELIMINARES ARGUIDAS PELA REQUERIDA", "DOS FUNDAMENTOS JURÍDICOS DOS PEDIDOS", "DOS PEDIDOS"). Segoe UI bold preto, caixa alta. **NUNCA adicionar numerais romanos manuais ("I — ", "II — ") no texto** — a numeração 1., 2., 3. vem automaticamente do estilo |
+| `3. Subtítulo` | Subseções do mérito ("Dos parâmetros de validade do contrato RCC", "Da irregularidade da contratação digital", etc.). Segoe UI Semibold dourado #B3824C. Capitalização "primeira letra maiúscula apenas" preservando siglas (RCC, RMC, CCB, IRDR, TJAM, STJ, CDC, etc.). Aplicar **border bottom** (linha horizontal abaixo do parágrafo) via `pBdr w:bottom` no XML |
+| `3.1 Subtítulo intermediário` | Subseções específicas: cada preliminar dentro de "DAS PRELIMINARES ARGUIDAS PELA REQUERIDA" ("Da alegada prescrição trienal", "Da alegada ausência de interesse processual", "Do indeferimento da revogação da gratuidade") + sub-subseções dentro do mérito quando aplicável. Mesma cor + capitalização + border bottom do `3. Subtítulo` |
+| `3.1 Subtítulo secundário` | Sub-subseções raras — Franklin Gothic Book bold |
+| `4. Citação` | Ementas e trechos de jurisprudência citados (italic, recuo ~4 cm) |
+| `5. Lista alfabética` | Listas a), b), c) |
+
+Para gerar a peça, **comece a partir do `.docx` modelo** indicado em `_plano.json:modelo_base.docx_original`. Limpe o corpo (preserve header/footer/timbrado) e popule com os parágrafos da réplica usando os estilos acima. Não faça `Cambria` em corpo. Não use `style.name = 'Normal'` indiscriminadamente.
+
+Antes de salvar, verifique:
+. Cada cabeçalho principal vira `2. Título`. **Sem numerais romanos no texto** (estilo gera numeração automática 1., 2., 3.).
+. Cada subseção do mérito vira `3. Subtítulo`. **Capitalização "primeira maiúscula apenas"** preservando siglas. **Border bottom aplicado** (linha horizontal embaixo).
+. Cada preliminar individual vira `3.1 Subtítulo intermediário`, agrupada sob UM cabeçalho "DAS PRELIMINARES ARGUIDAS PELA REQUERIDA" (não criar múltiplos `2. Título` para preliminares separadas).
+. Texto corrido vira `1. Parágrafo`.
+. Ementa do caso concreto: estilo `2. Título`, **bold**, **recuo à esquerda de 4 cm**.
+. Ementa de jurisprudência longa entre aspas vira `4. Citação`.
+. Listas a), b), c) viram `5. Lista alfabética`.
+
+**Alinhamento — NÃO sobrescrever em títulos e subtítulos:**
+
+Os estilos `2. Título`, `3. Subtítulo` e `3.1 Subtítulo intermediário` do modelo do escritório já vêm com **alinhamento à esquerda**. NÃO faça `paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER` nesses parágrafos — isso cria override que sobrescreve o estilo. Se você precisar copiar parágrafos de outro `.docx` para o modelo, sempre limpe o `<w:jc>` do `<w:pPr>` antes de aplicar o estilo, ou use `paragraph.alignment = None`. O alinhamento dos cabeçalhos e subtítulos vem **exclusivamente do estilo nomeado**.
+
+```python
+# Antes de aplicar o estilo, limpar alignment override
+from docx.oxml.ns import qn
+pPr = paragraph._element.find(qn("w:pPr"))
+if pPr is not None:
+    jc = pPr.find(qn("w:jc"))
+    if jc is not None:
+        pPr.remove(jc)
+paragraph.style = doc.styles["2. Título"]  # ou 3. Subtítulo, etc.
+```
+
+**Capitalização de subtítulos — implementação técnica:**
+```python
+SIGLAS_UPPER = {"RCC", "RMC", "CCB", "IRDR", "TJAM", "TJAL", "TJBA", "TJMG",
+                "STJ", "STF", "INSS", "OAB", "AM", "AL", "BA", "MG", "SC",
+                "CDC", "CPC", "CC", "TED", "BMG", "PAN", "ICP", "FIDC",
+                "AGIBANK", "FACTA", "TCE", "IP", "CPF", "CNPJ", "CNJ",
+                "B41", "B31", "B52", "BPC"}
+
+def capitalizar_primeira_apenas(text):
+    result = text.lower()
+    if result:
+        result = result[0].upper() + result[1:]
+    for sigla in sorted(SIGLAS_UPPER, key=len, reverse=True):
+        pattern = r"\b" + sigla.lower() + r"\b"
+        result = re.sub(pattern, sigla, result, flags=re.IGNORECASE)
+    return result
+```
+
+**Border bottom — implementação:**
+```python
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def aplicar_border_bottom(paragraph, color="B3824C"):
+    pPr = paragraph._element.get_or_add_pPr()
+    pBdr = pPr.find(qn("w:pBdr")) or OxmlElement("w:pBdr")
+    if pBdr.getparent() is None:
+        pPr.append(pBdr)
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "6")
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), color)
+    pBdr.append(bottom)
+```
+
+**Cuidados ao usar o modelo do vault:**
+. Trocar o nome do procurador do modelo pelo do caso (`_analise.json:advogado_autor`). Modelos guardam Eduardo Rebonatto / Tiago de Azevedo Lima / Patrick Willian — não copiar essa parte cega.
+. Trocar endereçamento, processo, comarca, vara, parte autora pelos dados do caso atual.
+. Manter intactos: header com timbrado (1 imagem), footer com assinatura visual (1 imagem), margens, configurações de seção.
 
 ## Processo — EXECUTAR NA ORDEM
 

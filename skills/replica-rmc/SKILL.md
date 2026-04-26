@@ -29,10 +29,20 @@ Se apenas o PDF consolidado estiver presente, a skill roda `fatiar-processo` aut
       │
       ├─ (0) fatiar-processo se necessário (PDF consolidado vira pasta fatiada)
       │
+      ├─ (0.5) extract_facts.py — CAMADA DETERMINÍSTICA
+      │        Varre PDFs com regex calibradas e produz _facts.json
+      │        com CPFs, CNJs, OABs, datas, valores R$, IPs, hashes,
+      │        bancos mencionados, marcadores temáticos (HISCON, TED,
+      │        contestação, fatura, etc.) e headers em caixa alta.
+      │        Cada fato vem com (arquivo, página, contexto).
+      │        Fonte de verdade que ancora etapas 1 e 4.
+      │
       ├─ (1) analisador-processo-rmc
-      │        Extrai _analise.json (autor, processo, banco, contratos, anexos,
-      │        TEDs, faturas, laudo digital, RCC gêmeo, observações_caso,
-      │        bloqueadores). Trecho literal OBRIGATÓRIO em cada tese do banco.
+      │        CONSOME _facts.json (não re-extrai). Extrai _analise.json
+      │        (autor, processo, banco, contratos, anexos, TEDs, faturas,
+      │        laudo digital, RCC gêmeo, observações_caso, bloqueadores).
+      │        Cada dado pontual ancorado em _facts.json. Trecho literal
+      │        OBRIGATÓRIO em cada tese do banco. Preenche _meta.fontes_facts.
       │
       ├─ (1.5) Checagem de bloqueadores
       │        Se houver bloqueador ALTA, pipeline para. Apresenta ao usuário
@@ -52,9 +62,13 @@ Se apenas o PDF consolidado estiver presente, a skill roda `fatiar-processo` aut
       │        antes de devolver.
       │
       ├─ (4) revisor-replica-rmc
-      │        Checklist + 29 erros + scripts. Cobertura métrica explícita.
-      │        Severidade graduada (CRÍTICO / MÉDIO / COSMÉTICO).
-      │        Word Comments embutidos no .docx, sem relatório paralelo.
+      │        Roda validate_against_facts.py (cada CPF, CNJ, valor,
+      │        data, IP, hash da réplica precisa estar em _facts.json;
+      │        cada citação literal entre aspas precisa existir no
+      │        texto do PDF). Checklist + 29 erros + scripts.
+      │        Cobertura métrica explícita. Severidade graduada
+      │        (CRÍTICO / MÉDIO / COSMÉTICO). Word Comments embutidos
+      │        no .docx, sem relatório paralelo.
       │
       ├─ (5) Se AJUSTES NECESSÁRIOS, volta a (3) com feedback; máx 2 iterações.
       │
@@ -72,11 +86,28 @@ Se apenas o PDF consolidado estiver presente, a skill roda `fatiar-processo` aut
 2. Se consolidado: invocar a skill `fatiar-processo` primeiro.
 3. Confirmar existência mínima: inicial + contestação. Se faltar qualquer, interromper e reportar.
 
+### Etapa 0.5 — Extração determinística de fatos (`_facts.json`)
+
+Antes de qualquer subagent rodar, executar o extractor determinístico:
+
+```bash
+python ~/.claude/skills/replica-rmc/scripts/extract_facts.py "{{PASTA}}"
+```
+
+Saída obrigatória: `{{PASTA}}/_facts.json` com:
+
+1. CPFs, CNPJs, CNJs, OABs, datas, valores R$, IPs, hashes, e-mails, telefones, CEPs (cada item com arquivo, página e contexto).
+2. Bancos canônicos mencionados (BMG, Santander, Bradesco, Pan, Daycoval, Olé, Parati, Safra, Mercantil, etc.).
+3. Marcadores temáticos (HISCON, HISCRE, CCB, TED, fatura, RMC, RCC, ICP-Brasil, Clicksign, biometria, IN 28/2008, Resolução CNJ 159, litigância predatória, etc.) com mapa de páginas por arquivo.
+4. Headers em caixa alta (candidatos a títulos de seção da contestação).
+
+Esse arquivo é fonte de verdade pontual para a etapa 1 (analisador) e para a validação final na etapa 4 (revisor). Sem ele, o pipeline para com erro.
+
 ### Etapa 1 — Análise
 
 Invocar o subagent `analisador-processo-rmc` com prompt:
 
-> "Analise esta pasta de processo RMC/RCC: {{PASTA}}. Extraia dados estruturados conforme template em references/schema_caso.json. Trecho literal OBRIGATÓRIO em cada preliminar e tese do banco. Sinalize bloqueadores em campo próprio. Devolva apenas JSON válido."
+> "Analise esta pasta de processo RMC/RCC: {{PASTA}}. {{PASTA}}/_facts.json já está disponível como fonte de verdade pontual. Extraia dados estruturados conforme template em references/schema_caso.json, ancorando todo dado pontual (CPF, CNJ, valor, data, IP, hash) em entrada do _facts.json e preenchendo _meta.fontes_facts com referências. Trecho literal OBRIGATÓRIO em cada preliminar e tese do banco (ler somente as páginas marcadas como 'contestacao' nos marcadores). Sinalize bloqueadores em campo próprio. Devolva apenas JSON válido."
 
 Salvar em `{{PASTA}}/_analise.json`.
 
@@ -106,7 +137,7 @@ Invocar o subagent `redator-replica-rmc` com prompt:
 
 Invocar o subagent `revisor-replica-rmc` com prompt:
 
-> "Valide {{PASTA}}/Réplica*.docx. Cobertura 100% do _contrato_rebate.json. Severidade graduada nos achados. Word Comments embutidos no .docx (não gerar relatório paralelo). Resumo no chat com cobertura métrica e classificação APTO / APTO COM RESSALVAS / AJUSTES NECESSÁRIOS."
+> "Valide {{PASTA}}/Réplica*.docx. Antes de qualquer outra checagem, rodar `validate_against_facts.py --replica {{PASTA}}/Réplica*.docx --facts {{PASTA}}/_facts.json --pasta {{PASTA}}` para verificar que cada CPF, CNJ, valor R$, data, IP, hash da réplica está ancorado em _facts.json e cada citação literal entre aspas existe nos PDFs do processo. Itens não-ancorados de tipo CPF/CNPJ/valor/IP/hash/citação_literal são CRÍTICOS; CNJ/data não-ancorados são MÉDIOS. Em seguida: cobertura 100% do _contrato_rebate.json, severidade graduada nos achados, Word Comments embutidos no .docx (não gerar relatório paralelo), resumo no chat com cobertura métrica + estatísticas da validação contra facts + classificação APTO / APTO COM RESSALVAS / AJUSTES NECESSÁRIOS."
 
 ### Etapa 5 — Iteração
 
@@ -183,18 +214,31 @@ O subagent `consultor-vault-rmc` deve ler (não duplicar aqui):
 
 Ver `scripts/` desta skill. Todos Python 3, dependências: `pymupdf`, `python-docx`.
 
-1. `extract_processo.py` para extração estruturada de PDF processual.
-2. `check_ip_rfc1918.py` para validação de IP contra blocos privados.
-3. `check_ted_conta_inss.py` para cruzamento conta INSS × conta TED.
-4. `detect_2via_massiva.py` para detectar postagem concentrada em faturas.
-5. `check_cartao_gemeo.py` para cruzar número do cartão × HISCON.
-6. `check_bmg_pre_09_2023.py` para flag de BMG pré-setembro/2023.
-7. `check_refin_maquiador_bmg.py` para detectar "crédito de refin" sem queda de saldo.
-8. `check_ancora_contestacao.py` para validar âncora de cada afirmação da réplica.
-9. `gerar_tabela_onerosidade.py` para os 6 valores adaptativos da tabela do mérito.
-10. `gerar_docx.py` para montagem final .docx Cambria.
-11. `forcar_cambria.py` para forçar Cambria em .docx existente.
-12. `aplicar_layout_modelo.py` para aplicar timbre + estilos + alinhamentos do modelo do vault.
+**Camada determinística (NOVA — fundação do pipeline):**
+
+1. `extract_facts.py` — varre PDFs com regex calibradas e gera `_facts.json` (CPFs, CNJs, OABs, datas, valores, IPs, hashes, bancos, marcadores temáticos). Roda na etapa 0.5, antes de qualquer subagent. Saída é fonte de verdade pontual para todo o pipeline.
+2. `validate_against_facts.py` — checa cada CPF, CNJ, valor, data, IP, hash e citação literal da réplica gerada contra `_facts.json` e contra o texto do PDF. Roda na etapa 4 (revisor) como primeira validação.
+
+**Extração e fatiamento:**
+
+3. `extract_processo.py` para extração estruturada de PDF processual (texto narrativo de páginas-alvo).
+
+**Checks específicos (mantidos):**
+
+4. `check_ip_rfc1918.py` para validação de IP contra blocos privados.
+5. `check_ted_conta_inss.py` para cruzamento conta INSS × conta TED.
+6. `detect_2via_massiva.py` para detectar postagem concentrada em faturas.
+7. `check_cartao_gemeo.py` para cruzar número do cartão × HISCON.
+8. `check_bmg_pre_09_2023.py` para flag de BMG pré-setembro/2023.
+9. `check_refin_maquiador_bmg.py` para detectar "crédito de refin" sem queda de saldo.
+10. `check_ancora_contestacao.py` para validar âncora de cada afirmação da réplica.
+
+**Geração e layout:**
+
+11. `gerar_tabela_onerosidade.py` para os 6 valores adaptativos da tabela do mérito.
+12. `gerar_docx.py` para montagem final .docx Cambria.
+13. `forcar_cambria.py` para forçar Cambria em .docx existente.
+14. `aplicar_layout_modelo.py` para aplicar timbre + estilos + alinhamentos do modelo do vault.
 
 ## O que esta skill NÃO faz
 
@@ -207,10 +251,12 @@ Ver `scripts/` desta skill. Todos Python 3, dependências: `pymupdf`, `python-do
 
 Se a skill for interrompida no meio (ex: contexto acaba), retomar pelo JSON salvo:
 
-1. Se existir `_analise.json` e não `_plano.json`: começar da etapa 1.5 (checagem de bloqueadores) e seguir para etapa 2.
-2. Se existir `_plano.json` mas não `_contrato_rebate.json`: começar da etapa 2 com prompt parcial pedindo só o contrato.
-3. Se existir os três JSONs e não `.docx`: começar da etapa 3.
-4. Se existir `.docx` sem revisão: começar da etapa 4.
+1. Se NÃO existir `_facts.json`: começar da etapa 0.5 (rodar `extract_facts.py`).
+2. Se existir `_facts.json` mas não `_analise.json`: começar da etapa 1.
+3. Se existir `_analise.json` e não `_plano.json`: começar da etapa 1.5 (checagem de bloqueadores) e seguir para etapa 2.
+4. Se existir `_plano.json` mas não `_contrato_rebate.json`: começar da etapa 2 com prompt parcial pedindo só o contrato.
+5. Se existir os três JSONs (analise, plano, contrato_rebate) e não `.docx`: começar da etapa 3.
+6. Se existir `.docx` sem revisão: começar da etapa 4.
 
 ## Referências cruzadas
 
